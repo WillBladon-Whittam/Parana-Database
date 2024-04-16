@@ -1,5 +1,5 @@
 import sqlite3
-from typing import List, Union
+from typing import List, Union, Tuple
 
 
 class SqlWrapper:
@@ -11,35 +11,18 @@ class SqlWrapper:
         self.db = sqlite3.connect(self.db_file)
         self.cursor = self.db.cursor()
         
-    def execute_query(self, sql_query: str) -> None:
-        self.cursor.execute(sql_query)
+    def execute_query(self, sql_query: str, sql_parameters: Tuple[str, int] = tuple()) -> None:
+        self.cursor.execute(sql_query, sql_parameters)
         
-    def select_query(self, table: str, 
-                     columns: List[str], 
-                     where: str = None, 
-                     order_by: str = None,
-                     limit: int = None,
-                     fetch_all: bool = True) -> Union[str, List[str]]:
+    def select_query(self, sql_query, sql_parameters: Tuple[str, int] = tuple(), fetch_all: bool = True,):
         """
         Creates a SELECT query
 
         Args:
-            table: The table to SELECT fields from
-            columns: The column(s) to SELECT from
-            where: A condition for the values returned
-            order_by: Order the values returned. Must be parsed as '{column name} ASC/DESC'
-            limit: Limits the number of rows returned
-            fetch_all: True to get all values, False to get one value
+            sql_query: An SQL Query to execute
+            fetch_all: If set to True, fetches all the rows returned, if set to False returns only 1
         """
-        sql_query = f"SELECT {', '.join([c for c in columns])} FROM {table}"
-        if where is not None:
-            sql_query += f" WHERE {where}"
-        if limit is not None:
-            sql_query += f" ORDER BY {order_by}"
-        if limit is not None:
-            sql_query += f" LIMIT {limit}"
-
-        self.execute_query(sql_query)
+        self.execute_query(sql_query, sql_parameters)
         if fetch_all:
             return self.cursor.fetchall()
         else:
