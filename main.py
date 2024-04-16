@@ -12,6 +12,9 @@ class ParanaShopperSession:
         
         self.welcome()
         
+        self.basket = self.get_basket_id()
+        print(self.basket)
+        
         self.main_loop()
 
     def get_shopper_id(self) -> int:
@@ -23,6 +26,17 @@ class ParanaShopperSession:
         if shopper_id not in [shopper[0] for shopper in shoppers]:
             raise ValueError(f"Shopper ID {shopper_id} is not a valid Shopper ID")
         return shopper_id
+    
+    def get_basket_id(self) -> int:
+        """
+        If there is basket created from today, use that basket and return the basket_id
+        """
+        return self.sql.select_query(columns=["basket_id"], 
+                                     table="shopper_baskets", 
+                                     where=f"shopper_id = {self.shopper_id} AND DATE(basket_created_date_time) = DATE('now')",
+                                     order_by="basket_created_date_time DESC",
+                                     limit=1)
+        
     
     def welcome(self) -> None:
         """
@@ -51,7 +65,6 @@ class ParanaShopperSession:
         """
         The main loop of the session
         """
-        
         # NOTE: match/case statements are python 3.10+
         match self.main_menu():
             
