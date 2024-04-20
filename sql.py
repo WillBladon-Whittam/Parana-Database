@@ -14,12 +14,13 @@ class SqlWrapper:
     def execute_query(self, sql_query: str, sql_parameters: Tuple[str, int] = tuple()) -> None:
         self.cursor.execute(sql_query, sql_parameters)
         
-    def select_query(self, sql_query, sql_parameters: Tuple[str, int] = tuple(), fetch_all: bool = True,):
+    def select_query(self, sql_query, sql_parameters: Tuple[str, int] = tuple(), fetch_all: bool = True):
         """
         Creates a SELECT query
 
         Args:
             sql_query: An SQL Query to execute
+            sql_parameters: Parameters for an SQL query
             fetch_all: If set to True, fetches all the rows returned, if set to False returns only 1
         """
         self.execute_query(sql_query, sql_parameters)
@@ -28,6 +29,19 @@ class SqlWrapper:
         else:
             return self.cursor.fetchone()
         
+    def insert_query(self, sql_query, sql_parameters: Tuple[str, int] = tuple(), commit=True):
+        """
+        Creates a INSERT query
+
+        Args:
+            sql_query: An SQL Query to execute
+            sql_parameters: Parameters for an SQL query
+            commit: Commit changes to database immediatly
+        """
+        self.execute_query(sql_query, sql_parameters)
+        if commit:
+            self.sql.db.commit()
+ 
     def close(self) -> None:
         self.db.close()
     
