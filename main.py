@@ -21,9 +21,10 @@ class ParanaShopperSession:
         
         self.welcome()
         
-        self.basket_id= self.get_basket_id()
+        self.basket_id = self.get_basket_id()
         if not self.basket_id:
             self.basket_id = self.create_basket()
+        self.basket_id = self.basket_id[0]
         self.main_loop()
 
     def get_shopper_id(self) -> int:
@@ -45,7 +46,7 @@ class ParanaShopperSession:
                                      "FROM shopper_baskets "
                                      "WHERE shopper_id = ? AND DATE(basket_created_date_time) = DATE('now') "
                                      "ORDER BY basket_created_date_time DESC "
-                                     "LIMIT 1", sql_parameters=(self.shopper_id,), fetch_all=False)[0]
+                                     "LIMIT 1", sql_parameters=(self.shopper_id,), fetch_all=False)
         
     def create_basket(self) -> int:
         """
@@ -180,9 +181,29 @@ class ParanaShopperSession:
         self.sql.insert_query("INSERT INTO basket_contents (basket_id, product_id, seller_id, quantity, price) "
                               "VALUES (?, ?, ?, ?, ?)", 
                               sql_parameters=(self.basket_id, selected_product_id[0], selected_seller_id[0], quantity, 
-                                              sellers[selected_seller-1][1].replace("£","").replace(")", "").replace("(", "")))  # Not a very elegant solution...
+                                              self.remove_money_format(sellers[selected_seller-1][1])))  # Not a very elegant solution...
         
         print("Item added to your basket")
+        
+    @staticmethod
+    def remove_money_format(value: str) -> str:
+        return value.replace("£","").replace(")", "").replace("(", "")
+        
+    def display_basket(self) -> None:
+        basket_contents = self.sql.select_query("SELECT ROW_NUMBER() OVER(), p.product_description, s.seller_name, bc.quantity, PRINTF('£%.2f', bc.price), PRINTF('£%.2f', bc.price * bc.quantity) "
+                                                "FROM basket_contents bc "
+                                                "INNER JOIN product_sellers ps ON bc.product_id = ps.product_id and bc.seller_id = ps.seller_id "
+                                                "INNER JOIN products p ON p.product_id = ps.product_id "
+                                                "INNER JOIN sellers s ON s.seller_id = ps.seller_id "
+                                                "WHERE bc.basket_id = ?", sql_parameters=self.basket_id)    
+        
+        if not basket_contents:
+            print("Your basket is empty\n")
+            
+        else:
+            # Abit of a botched way...
+            basket_contents.append((None, None, None, None, "Basket Total", f'£{sum([float(self.remove_money_format(item[4])) for item in basket_contents])}'))
+            self.pretty_print(basket_contents, headers=["Basket Item", "Product Description", "Seller Name", "Qty", "Price", "Total"])
 
     
     def main_menu(self) -> int:
@@ -199,16 +220,6 @@ class ParanaShopperSession:
               "6.\tCheckout\n"
               "7.\tExit\n")
         return int(input("Select an option: "))
-    
-    def display_basket(self):
-        basket_contents = self.sql.select_query("SELECT ROW_NUMBER() OVER(), p.product_description, s.seller_name, bc.quantity, PRINTF('£%.2f', bc.price), PRINTF('£%.2f', bc.price * bc.quantity) "
-                                                "FROM basket_contents bc "
-                                                "INNER JOIN product_sellers ps ON bc.product_id = ps.product_id and bc.seller_id = ps.seller_id "
-                                                "INNER JOIN products p ON p.product_id = ps.product_id "
-                                                "INNER JOIN sellers s ON s.seller_id = ps.seller_id "
-                                                "WHERE bc.basket_id = ?", sql_parameters=self.basket_id)    
-        
-        self.pretty_print(basket_contents, headers=["Basket Item", "Product Description", "Seller Name", "Qty", "Price", "Total"])
     
     def main_loop(self) -> None:
         """
