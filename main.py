@@ -9,6 +9,7 @@ Store database in the root directory as 'database' or specify when calling SqlWr
 
 Links Used:
 https://learnpython.com/blog/print-table-in-python/
+https://learnsql.com/cookbook/how-to-number-rows-in-sql/
 
 """
 
@@ -20,9 +21,9 @@ class ParanaShopperSession:
         
         self.welcome()
         
-        self.basket = self.get_basket_id()
-        if not self.basket:
-            self.basket = self.create_basket()
+        self.basket_id= self.get_basket_id()
+        if not self.basket_id:
+            self.basket_id = self.create_basket()
         self.main_loop()
 
     def get_shopper_id(self) -> int:
@@ -38,7 +39,7 @@ class ParanaShopperSession:
     
     def get_basket_id(self) -> int:
         """
-        If there is basket created from today, use that basket and return the basket_id
+        If there is a basket created from today, use that basket and return the basket_id
         """
         return self.sql.select_query("SELECT basket_id "
                                      "FROM shopper_baskets "
@@ -47,6 +48,9 @@ class ParanaShopperSession:
                                      "LIMIT 1", sql_parameters=(self.shopper_id,), fetch_all=False)[0]
         
     def create_basket(self) -> int:
+        """
+        If a basket is not already created from today, then create a new basket
+        """
         self.sql.insert_query("INSERT INTO shopper_baskets (shopper_id, basket_created_date_time) "
                               "VALUES (?, ?)", sql_parameters=(self.shopper_id, datetime.datetime.now().strftime("%Y-%m-%d"),))
         return self.sql.cursor.lastrowid
@@ -64,9 +68,16 @@ class ParanaShopperSession:
         print(f"Welcome {shopper_first_name} {shopper_surname}!\n")
         
     def pretty_print(self, results: Union[List[Tuple], Tuple], headers: List[str] = []) -> None:
+        """
+        Pretty print a table
+        
+        Args:
+            results: Results returned from an SQL query
+            headers: The headers for the table
+        """
         print(tabulate(results, headers), "\n")
         
-    def display_order_history(self):
+    def display_order_history(self) -> None:
         """
         Display the order history of the shopper (Option 1)
         """
@@ -92,25 +103,37 @@ class ParanaShopperSession:
             self.pretty_print(results=order_history, headers=["Order ID", "Order Date", "Product Description", "Seller", "Price", "Qty", "Status"])
             
     def display_options(self, options: List[Tuple[str]]) -> None:
+        """
+        Displays the options returned from an SQL query as a numbered list
+        """
         for i, option in enumerate(options, start=1):
             print(f"{i}.\t{"  ".join(str(row) for row in option)}")
         print("\n")
         
-    def prompt_number(self, prompt: str, _range: Tuple[int, int] = None):
+    def prompt_number(self, prompt: str, _range: Tuple[int, Union[int, None]] = None, error_message: str = "Invalid Value!") -> int:
+        """
+        Prompts the user for a number between a specific range.
+        """
         selected_option = None
-        if _range is None:
-            value = int(input(prompt))
-            return value
-        while selected_option not in range(_range[0], _range[1]):
+        if _range is None:  # If no range is specified
             selected_option = int(input(prompt))
-            if selected_option not in range(_range[0], _range[1]):
-                print("Invalid Value!\n")
+            return selected_option
+        elif _range[1] is None:  # If there is a minimum value
+            while (selected_option or -1) < _range[0]:
+                selected_option = int(input(prompt))
+                if selected_option <= _range[0]:
+                    print(f"{error_message}\n")
+        else:  # If there is a range of 2 values
+            while selected_option not in range(_range[0], _range[1]):
+                selected_option = int(input(prompt))
+                if selected_option not in range(_range[0], _range[1]):
+                    print(f"{error_message}\n")
         return selected_option
  
-    def add_item(self):
+    def add_item(self) -> None:
         """
         Add item to the shoppers basket.
-        Choose product categories -> products -> sellers
+        Choose product categories -> products -> sellers -> quantity
         """
         product_categories = self.sql.select_query("SELECT category_description "
                                                    "FROM categories "
@@ -120,40 +143,46 @@ class ParanaShopperSession:
         selected_category = self.prompt_number(prompt="Enter the number against the product category you want to choose: ", 
                                                _range=(1, len(product_categories)+1))
                 
-        # Use an embeded SQL query to get the category id of the product selected, then query the products table for that category
+        selected_category_id = self.sql.select_query("SELECT category_id "
+                                                     "FROM categories "
+                                                     "WHERE category_description = ?", sql_parameters=product_categories[selected_category-1], fetch_all=False)
         products = self.sql.select_query("SELECT product_description "
                                          "FROM products "
-                                         "WHERE category_id = (SELECT category_id "
-                                         "FROM categories "
-                                         "WHERE category_description = ?) "
-                                         "ORDER BY product_description ASC ", sql_parameters=product_categories[selected_category-1])
+                                         "WHERE category_id = ? "
+                                         "ORDER BY product_description ASC ", sql_parameters=selected_category_id)
 
         self.display_options(products)
         selected_product = self.prompt_number(prompt="Enter the number against the product you want to choose: ", 
                                               _range=(1, len(products)+1))
         
-        # Use an embeded SQL query to get the product id of the product selected, then query the products_sellers table for that product_id
+        selected_product_id = self.sql.select_query("SELECT product_id "
+                                                    "FROM products "
+                                                    "WHERE product_description = ?", sql_parameters=products[selected_product-1], fetch_all=False)
+        
         sellers = self.sql.select_query("SELECT s.seller_name, PRINTF('(£%.2f)', ps.price) "
                                         "FROM sellers s "
                                         "INNER JOIN product_sellers ps ON s.seller_id = ps.seller_id "
-                                        "WHERE ps.product_id = (SELECT product_id "
-                                        "FROM products "
-                                        "WHERE product_description = ?) "
-                                        "ORDER BY s.seller_name ASC ", sql_parameters=products[selected_product-1])        
+                                        "WHERE ps.product_id = ? "
+                                        "ORDER BY s.seller_name ASC ", sql_parameters=selected_product_id)        
         
         self.display_options(sellers)
         selected_seller = self.prompt_number(prompt="Enter the number against the seller you want to choose: ", 
                                              _range=(1, len(sellers)+1))
         
-        quantity = self.prompt_number(prompt="Enter the quantity of the selected product you want to buy: ")
-
+        selected_seller_id = self.sql.select_query("SELECT seller_id "
+                                                   "FROM sellers "
+                                                   "WHERE seller_name = ?", sql_parameters=sellers[selected_seller-1][0], fetch_all=False)
+        
+        quantity = self.prompt_number(prompt="Enter the quantity of the selected product you want to buy: ", _range=(1, None),
+                                      error_message="The quantity must be greater than 0")
+        
 
         self.sql.insert_query("INSERT INTO basket_contents (basket_id, product_id, seller_id, quantity, price) "
                               "VALUES (?, ?, ?, ?, ?)", 
-                              sql_parameters=(self.basket, products[selected_product-1][0], sellers[selected_seller-1][0], quantity, 
+                              sql_parameters=(self.basket_id, selected_product_id[0], selected_seller_id[0], quantity, 
                                               sellers[selected_seller-1][1].replace("£","").replace(")", "").replace("(", "")))  # Not a very elegant solution...
         
-        print("Item Added")
+        print("Item added to your basket")
 
     
     def main_menu(self) -> int:
@@ -171,6 +200,16 @@ class ParanaShopperSession:
               "7.\tExit\n")
         return int(input("Select an option: "))
     
+    def display_basket(self):
+        basket_contents = self.sql.select_query("SELECT ROW_NUMBER() OVER(), p.product_description, s.seller_name, bc.quantity, PRINTF('£%.2f', bc.price), PRINTF('£%.2f', bc.price * bc.quantity) "
+                                                "FROM basket_contents bc "
+                                                "INNER JOIN product_sellers ps ON bc.product_id = ps.product_id and bc.seller_id = ps.seller_id "
+                                                "INNER JOIN products p ON p.product_id = ps.product_id "
+                                                "INNER JOIN sellers s ON s.seller_id = ps.seller_id "
+                                                "WHERE bc.basket_id = ?", sql_parameters=self.basket_id)    
+        
+        self.pretty_print(basket_contents, headers=["Basket Item", "Product Description", "Seller Name", "Qty", "Price", "Total"])
+    
     def main_loop(self) -> None:
         """
         The main loop of the session
@@ -186,7 +225,7 @@ class ParanaShopperSession:
                    self.add_item()
                 
                 case 3:
-                    raise NotImplementedError("View your basket")
+                    self.display_basket()
                 
                 case 4:
                     raise NotImplementedError("Change the quantity of an item in your basket")

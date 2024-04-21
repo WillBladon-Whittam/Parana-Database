@@ -23,6 +23,8 @@ class SqlWrapper:
             sql_parameters: Parameters for an SQL query
             fetch_all: If set to True, fetches all the rows returned, if set to False returns only 1
         """
+        if not isinstance(sql_parameters, tuple):
+            sql_parameters = (sql_parameters,)
         self.execute_query(sql_query, sql_parameters)
         if fetch_all:
             return self.cursor.fetchall()
@@ -38,6 +40,8 @@ class SqlWrapper:
             sql_parameters: Parameters for an SQL query
             commit: Commit changes to database immediatly
         """
+        if not isinstance(sql_parameters, tuple):
+            sql_parameters = (sql_parameters,)
         self.execute_query(sql_query, sql_parameters)
         if commit:
             self.db.commit()
