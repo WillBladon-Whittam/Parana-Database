@@ -44,7 +44,7 @@ class ParanaShopperSession:
                                      "FROM shopper_baskets "
                                      "WHERE shopper_id = ? AND DATE(basket_created_date_time) = DATE('now') "
                                      "ORDER BY basket_created_date_time DESC "
-                                     "LIMIT 1", sql_parameters=(self.shopper_id,), fetch_all=False)
+                                     "LIMIT 1", sql_parameters=(self.shopper_id,), fetch_all=False)[0]
         
     def create_basket(self) -> int:
         self.sql.insert_query("INSERT INTO shopper_baskets (shopper_id, basket_created_date_time) "
@@ -93,13 +93,14 @@ class ParanaShopperSession:
             
     def display_options(self, options: List[Tuple[str]]) -> None:
         for i, option in enumerate(options, start=1):
-            print(f"{i}. \t{option[0]}")
+            print(f"{i}.\t{"  ".join(str(row) for row in option)}")
         print("\n")
         
     def prompt_number(self, prompt: str, _range: Tuple[int, int] = None):
         selected_option = None
         if _range is None:
-            return int(input(prompt))
+            value = int(input(prompt))
+            return value
         while selected_option not in range(_range[0], _range[1]):
             selected_option = int(input(prompt))
             if selected_option not in range(_range[0], _range[1]):
@@ -112,42 +113,45 @@ class ParanaShopperSession:
         Choose product categories -> products -> sellers
         """
         product_categories = self.sql.select_query("SELECT category_description "
-                                                   "FROM categories")
+                                                   "FROM categories "
+                                                   "ORDER BY category_description ASC ")
         
         self.display_options(product_categories)
         selected_category = self.prompt_number(prompt="Enter the number against the product category you want to choose: ", 
-                                               _range=(1, len(product_categories)))
+                                               _range=(1, len(product_categories)+1))
                 
         # Use an embeded SQL query to get the category id of the product selected, then query the products table for that category
         products = self.sql.select_query("SELECT product_description "
                                          "FROM products "
                                          "WHERE category_id = (SELECT category_id "
                                          "FROM categories "
-                                         "WHERE category_description = ?)", sql_parameters=product_categories[selected_category-1])
-        
+                                         "WHERE category_description = ?) "
+                                         "ORDER BY product_description ASC ", sql_parameters=product_categories[selected_category-1])
+
         self.display_options(products)
         selected_product = self.prompt_number(prompt="Enter the number against the product you want to choose: ", 
-                                              _range=(1, len(products)))
+                                              _range=(1, len(products)+1))
         
         # Use an embeded SQL query to get the product id of the product selected, then query the products_sellers table for that product_id
-        sellers = self.sql.select_query("SELECT s.seller_name "
+        sellers = self.sql.select_query("SELECT s.seller_name, PRINTF('(£%.2f)', ps.price) "
                                         "FROM sellers s "
                                         "INNER JOIN product_sellers ps ON s.seller_id = ps.seller_id "
                                         "WHERE ps.product_id = (SELECT product_id "
                                         "FROM products "
-                                        "WHERE product_description = ?)", sql_parameters=products[selected_product-1])
+                                        "WHERE product_description = ?) "
+                                        "ORDER BY s.seller_name ASC ", sql_parameters=products[selected_product-1])        
         
-        
-        # ToDo: When displaying sellers, list there prices next to them    
         self.display_options(sellers)
         selected_seller = self.prompt_number(prompt="Enter the number against the seller you want to choose: ", 
-                                             _range=(1, len(sellers)))
+                                             _range=(1, len(sellers)+1))
         
         quantity = self.prompt_number(prompt="Enter the quantity of the selected product you want to buy: ")
 
-        # ToDo: Commit products to basket, need to first get the price it was sold at.        
-        # self.sql.insert_query("INSERT INTO basket_contents (basket_id, product_id, seller_id, quantity, price) "
-        #                       "VALUES (?, ?, ?, ?, ?)", sql_parameters=(self.basket, products[selected_product-1], sellers[selected_seller-1], quantity, ))
+
+        self.sql.insert_query("INSERT INTO basket_contents (basket_id, product_id, seller_id, quantity, price) "
+                              "VALUES (?, ?, ?, ?, ?)", 
+                              sql_parameters=(self.basket, products[selected_product-1][0], sellers[selected_seller-1][0], quantity, 
+                                              sellers[selected_seller-1][1].replace("£","").replace(")", "").replace("(", "")))  # Not a very elegant solution...
         
         print("Item Added")
 
@@ -158,13 +162,13 @@ class ParanaShopperSession:
         """
         print("PARANÁ – SHOPPER MAIN MENU\n"
               "----------------------------------------------------\n"
-              "1.	Display your order history\n"
-              "2.	Add an item to your basket\n"
-              "3.	View your basket\n"
-              "4.	Change the quantity of an item in your basket\n"
-              "5.	Remove an item from your basket\n"
-              "6.	Checkout\n"
-              "7.	Exit\n")
+              "1.\tDisplay your order history\n"
+              "2.\tAdd an item to your basket\n"
+              "3.\tView your basket\n"
+              "4.\tChange the quantity of an item in your basket\n"
+              "5.\tRemove an item from your basket\n"
+              "6.\tCheckout\n"
+              "7.\tExit\n")
         return int(input("Select an option: "))
     
     def main_loop(self) -> None:

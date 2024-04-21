@@ -40,7 +40,7 @@ class SqlWrapper:
         """
         self.execute_query(sql_query, sql_parameters)
         if commit:
-            self.sql.db.commit()
+            self.db.commit()
  
     def close(self) -> None:
         self.db.close()
