@@ -11,6 +11,9 @@ class SqlWrapper:
         self.db = sqlite3.connect(self.db_file)
         self.cursor = self.db.cursor()
         
+    def __str__(self):
+        return f"SQL Database wrapper for: {self.db_file}"
+        
     def execute_query(self, sql_query: str, sql_parameters: Tuple[str, int] = tuple()) -> None:
         self.cursor.execute(sql_query, sql_parameters)
         
