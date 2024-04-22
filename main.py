@@ -21,9 +21,11 @@ class ParanaShopperSession:
         
         self.welcome()
         
-        self.basket_id = self.get_basket_id()[0]
+        self.basket_id = self.get_basket_id()
         if not self.basket_id:
             self.basket_id = self.create_basket()
+        else:
+            self.basket_id = self.basket_id[0]
         self.main_loop()
 
     def get_shopper_id(self) -> int:
@@ -43,7 +45,7 @@ class ParanaShopperSession:
         """
         return self.sql.select_query("SELECT basket_id "
                                      "FROM shopper_baskets "
-                                     "WHERE shopper_id = ? AND DATE(basket_created_date_time) = DATE('now') "
+                                     "WHERE shopper_id = ? AND DATE(basket_created_date_time) = DATE('now', 'localtime') "  # Must use localtime, otherwise breaks at midnight
                                      "ORDER BY basket_created_date_time DESC "
                                      "LIMIT 1", sql_parameters=(self.shopper_id,), fetch_all=False)
         
@@ -51,7 +53,7 @@ class ParanaShopperSession:
         """
         If a basket is not already created from today, then create a new basket
         """
-        self.sql.insert_query("INSERT INTO shopper_baskets (shopper_id, basket_created_date_time) "
+        self.sql.update_table("INSERT INTO shopper_baskets (shopper_id, basket_created_date_time) "
                               "VALUES (?, ?)", sql_parameters=(self.shopper_id, datetime.datetime.now().strftime("%Y-%m-%d"),))
         return self.sql.cursor.lastrowid
     
@@ -191,7 +193,7 @@ class ParanaShopperSession:
         quantity = self.prompt_number(prompt="Enter the quantity of the selected product you want to buy: ", _range=(1, None),
                                       error_message="The quantity must be greater than 0")        
 
-        query_status = self.sql.insert_query("INSERT INTO basket_contents (basket_id, product_id, seller_id, quantity, price) "
+        query_status = self.sql.update_table("INSERT INTO basket_contents (basket_id, product_id, seller_id, quantity, price) "
                                              "VALUES (?, ?, ?, ?, ?)", 
                                               sql_parameters=(self.basket_id, selected_product_id[0], selected_seller_id[0], quantity, 
                                               self.remove_money_format(sellers[selected_seller-1][1])))  # Not a very elegant solution...
@@ -244,7 +246,7 @@ class ParanaShopperSession:
                                                     error_message="The quantity must be greater than zero")
         
         
-        self.sql.insert_query("UPDATE basket_contents "
+        self.sql.update_table("UPDATE basket_contents "
                               "SET quantity = ? "
                               "WHERE product_id = (SELECT product_id "
                                                    "FROM products "
@@ -267,7 +269,7 @@ class ParanaShopperSession:
         answer = self.prompt_yes_no("Do you definitly want to delete this product from your basket (Y/N)? ")
 
         if answer:
-            self.sql.insert_query("DELETE FROM basket_contents "
+            self.sql.update_table("DELETE FROM basket_contents "
                                   "WHERE product_id = (SELECT product_id "
                                                       "FROM products WHERE " 
                                                       "product_description = ?) and basket_id = ?", sql_parameters=(basket_contents[basket_item_number-1][1], self.basket_id))
@@ -276,7 +278,41 @@ class ParanaShopperSession:
         else:
             return
             
+            
+    def checkout(self) -> None:
+        basket_contents = self.display_basket()
+        if not basket_contents:
+            return
         
+        answer = self.prompt_yes_no("Do you wish to proceed with the checkout (Y/N)? ")
+        
+        if answer:
+            # Insert row into shoppers_orders
+            self.sql.update_table("INSERT INTO shopper_orders (shopper_id, order_date, order_status) "
+                                  "VALUES (?, ?, ?)", sql_parameters=(self.shopper_id, datetime.datetime.now().strftime("%Y-%m-%d"), "Placed"))
+
+            # Insert row into ordered_products
+            for item in basket_contents[:-1]:
+                self.sql.update_table("INSERT INTO ordered_products (order_id, product_id, seller_id, quantity, price, ordered_product_status) "
+                                      "VALUES (?, (SELECT product_id "
+                                               "FROM products WHERE " 
+                                               "product_description = ?), (SELECT seller_id "
+                                                                        "FROM sellers WHERE " 
+                                                                        "seller_name = ?), ?, ?, ?)", sql_parameters=(self.sql.cursor.lastrowid, item[1], item[2], item[3], self.remove_money_format(item[4]), "Placed"))
+            
+            # Delete rows in basket_contents associated with the basket
+            self.sql.update_table("DELETE FROM basket_contents "
+                                  "WHERE basket_id = ?", sql_parameters=(self.basket_id))
+            
+            # Delete basket in shopper_baskets
+            self.sql.update_table("DELETE FROM shopper_baskets "
+                                  "WHERE basket_id = ?", sql_parameters=(self.basket_id))
+            
+            print("Checkout complete, your order has been placed\n")
+            
+        else:
+    
+            return
     
     def main_menu(self) -> int:
         """
@@ -317,7 +353,7 @@ class ParanaShopperSession:
                     self.remove_item()
                 
                 case 6:
-                    raise NotImplementedError("Checkout")
+                    self.checkout()
                 
                 case 7:
                     self.sql.close()

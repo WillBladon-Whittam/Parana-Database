@@ -31,9 +31,9 @@ class SqlWrapper:
         else:
             return self.cursor.fetchone()
         
-    def insert_query(self, sql_query, sql_parameters: Tuple[str, int] = tuple(), commit=True) -> Union[None, Exception]:
+    def update_table(self, sql_query, sql_parameters: Tuple[str, int] = tuple(), commit=True) -> Union[None, Exception]:
         """
-        Creates a INSERT/UPDATE query
+        Creates a INSERT/UPDATE/DELETE query
 
         Args:
             sql_query: An SQL Query to execute
