@@ -110,6 +110,21 @@ class ParanaShopperSession:
             print(f"{i}.\t{"  ".join(str(row) for row in option)}")
         print("\n")
         
+    def prompt_yes_no(self, prompt: str) -> bool:
+        """
+        Prompts the user for a Y/N response
+        """
+        selected_option = None
+        while selected_option not in ["Y", "N", "y", "n"]:
+            selected_option = input(prompt)
+            if selected_option not in ["Y", "N", "y", "n"]:
+                print("Please enter Y/N\n")
+        if selected_option.upper() == "Y":
+            return True
+        elif selected_option.upper() == "N":
+            return False
+        
+        
     def prompt_number(self, prompt: str, _range: Tuple[int, Union[int, None]] = None, error_message: str = "Invalid Value!") -> int:
         """
         Prompts the user for a number between a specific range.
@@ -236,6 +251,30 @@ class ParanaShopperSession:
                                                    "WHERE product_description = ?) and basket_id = ? ", sql_parameters=(quantity, basket_contents[basket_item_number-1][1], self.basket_id))
                 
         self.display_basket()
+        
+        
+    def remove_item(self) -> None:
+        basket_contents = self.display_basket()
+        if not basket_contents:
+            return
+        
+        if len(basket_contents) > 2:  # basket_contents is returned with the botched basket total column, so 2 instead of 1.
+            basket_item_number = self.prompt_number("Enter the basket item no. of the item you want to change: ", _range=(1, len(basket_contents)+1),
+                                                    error_message="The basket item no. you have entered is invalid")
+        else:
+            basket_item_number = 1
+            
+        answer = self.prompt_yes_no("Do you definitly want to delete this product from your basket (Y/N)? ")
+
+        if answer:
+            self.sql.insert_query("DELETE FROM basket_contents "
+                                  "WHERE product_id = (SELECT product_id "
+                                                      "FROM products WHERE " 
+                                                      "product_description = ?) and basket_id = ?", sql_parameters=(basket_contents[basket_item_number-1][1], self.basket_id))
+        
+            self.display_basket()
+        else:
+            return
             
         
     
@@ -275,7 +314,7 @@ class ParanaShopperSession:
                     self.change_quantity()
                 
                 case 5:
-                    raise NotImplementedError("Remove an item from your basket")
+                    self.remove_item()
                 
                 case 6:
                     raise NotImplementedError("Checkout")
