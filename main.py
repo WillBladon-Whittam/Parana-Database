@@ -21,10 +21,9 @@ class ParanaShopperSession:
         
         self.welcome()
         
-        self.basket_id = self.get_basket_id()
+        self.basket_id = self.get_basket_id()[0]
         if not self.basket_id:
             self.basket_id = self.create_basket()
-        self.basket_id = self.basket_id[0]
         self.main_loop()
 
     def get_shopper_id(self) -> int:
@@ -122,7 +121,7 @@ class ParanaShopperSession:
         elif _range[1] is None:  # If there is a minimum value
             while (selected_option or -1) < _range[0]:
                 selected_option = int(input(prompt))
-                if selected_option <= _range[0]:
+                if selected_option < _range[0]:
                     print(f"{error_message}\n")
         else:  # If there is a range of 2 values
             while selected_option not in range(_range[0], _range[1]):
@@ -175,18 +174,20 @@ class ParanaShopperSession:
                                                    "WHERE seller_name = ?", sql_parameters=sellers[selected_seller-1][0], fetch_all=False)
         
         quantity = self.prompt_number(prompt="Enter the quantity of the selected product you want to buy: ", _range=(1, None),
-                                      error_message="The quantity must be greater than 0")
-        
+                                      error_message="The quantity must be greater than 0")        
 
-        self.sql.insert_query("INSERT INTO basket_contents (basket_id, product_id, seller_id, quantity, price) "
-                              "VALUES (?, ?, ?, ?, ?)", 
-                              sql_parameters=(self.basket_id, selected_product_id[0], selected_seller_id[0], quantity, 
+        query_status = self.sql.insert_query("INSERT INTO basket_contents (basket_id, product_id, seller_id, quantity, price) "
+                                             "VALUES (?, ?, ?, ?, ?)", 
+                                              sql_parameters=(self.basket_id, selected_product_id[0], selected_seller_id[0], quantity, 
                                               self.remove_money_format(sellers[selected_seller-1][1])))  # Not a very elegant solution...
         
-        print("Item added to your basket")
+        if query_status is None:
+            print("Item added to your basket\n")
+        else:
+            print("That item is already in your basket. Please edit the quantity of the item in Option 4, or delete the item in Option 5\n")
         
     @staticmethod
-    def remove_money_format(value: str) -> str:
+    def remove_money_format(value: str) -> List[Tuple[int, str]]:
         return value.replace("£","").replace(")", "").replace("(", "")
         
     def display_basket(self) -> None:
@@ -199,12 +200,44 @@ class ParanaShopperSession:
         
         if not basket_contents:
             print("Your basket is empty\n")
-            
+            return basket_contents
         else:
             # Abit of a botched way...
-            basket_contents.append((None, None, None, None, "Basket Total", f'£{sum([float(self.remove_money_format(item[4])) for item in basket_contents])}'))
+            basket_contents.append((None, None, None, None, "Basket Total", f'£{sum([float(self.remove_money_format(item[5])) for item in basket_contents])}'))
             self.pretty_print(basket_contents, headers=["Basket Item", "Product Description", "Seller Name", "Qty", "Price", "Total"])
-
+            
+        return basket_contents
+            
+            
+    def change_quantity(self) -> None:
+        """
+        Change the quantity of an item in the basket.
+        The basket_contents table has 2 primary keys. basket_id and product_id.
+        So there can only be 1 of a product added to a basket, even if they are from different sellers.
+        """
+        basket_contents = self.display_basket()
+        if not basket_contents:
+            return
+        
+        if len(basket_contents) > 2:  # basket_contents is returned with the botched basket total column, so 2 instead of 1.
+            basket_item_number = self.prompt_number("Enter the basket item no. of the item you want to change: ", _range=(1, len(basket_contents)+1),
+                                                    error_message="The basket item no. you have entered is invalid")
+        else:
+            basket_item_number = 1
+            
+        quantity = self.prompt_number("Enter the new quantity of the selected product you want to buy: ", _range=(1, None),
+                                                    error_message="The quantity must be greater than zero")
+        
+        
+        self.sql.insert_query("UPDATE basket_contents "
+                              "SET quantity = ? "
+                              "WHERE product_id = (SELECT product_id "
+                                                   "FROM products "
+                                                   "WHERE product_description = ?) and basket_id = ? ", sql_parameters=(quantity, basket_contents[basket_item_number-1][1], self.basket_id))
+                
+        self.display_basket()
+            
+        
     
     def main_menu(self) -> int:
         """
@@ -239,7 +272,7 @@ class ParanaShopperSession:
                     self.display_basket()
                 
                 case 4:
-                    raise NotImplementedError("Change the quantity of an item in your basket")
+                    self.change_quantity()
                 
                 case 5:
                     raise NotImplementedError("Remove an item from your basket")

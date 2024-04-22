@@ -31,9 +31,9 @@ class SqlWrapper:
         else:
             return self.cursor.fetchone()
         
-    def insert_query(self, sql_query, sql_parameters: Tuple[str, int] = tuple(), commit=True):
+    def insert_query(self, sql_query, sql_parameters: Tuple[str, int] = tuple(), commit=True) -> Union[None, Exception]:
         """
-        Creates a INSERT query
+        Creates a INSERT/UPDATE query
 
         Args:
             sql_query: An SQL Query to execute
@@ -42,7 +42,10 @@ class SqlWrapper:
         """
         if not isinstance(sql_parameters, tuple):
             sql_parameters = (sql_parameters,)
-        self.execute_query(sql_query, sql_parameters)
+        try:
+            self.execute_query(sql_query, sql_parameters)
+        except sqlite3.IntegrityError as e:
+            return e
         if commit:
             self.db.commit()
  
