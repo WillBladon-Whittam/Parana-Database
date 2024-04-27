@@ -8,9 +8,9 @@ from typing import Tuple, Union, List
 Store database in the root directory as 'database' or specify when calling SqlWrapper
 
 Links Used:
-https://learnpython.com/blog/print-table-in-python/
-https://learnsql.com/cookbook/how-to-number-rows-in-sql/
-
+https://learnpython.com/blog/print-table-in-python/ -> Pretty print a SQL query results in a table
+https://learnsql.com/cookbook/how-to-number-rows-in-sql/ -> Number rows returned from an SQL Query
+https://www.sqlite.org/lang_datefunc.html -> DATE('now'), was returung the incorrect date at midnight. Needs to use local timezone.
 """
 
 
@@ -68,19 +68,34 @@ class ParanaShopperSession:
         """
         Prompts the user for a number between a specific range.
         """
-        selected_option = None
+        selected_option = -1
         if _range is None:  # If no range is specified
-            selected_option = int(input(prompt))
+            while not selected_option > 0:
+                try:
+                    selected_option = int(input(prompt))
+                except ValueError:
+                    print(f"{error_message}\n")
+                    continue
+                if selected_option <= 0:
+                    print(f"{error_message}\n")
             return selected_option
         elif _range[1] is None:  # If there is a minimum value
-            while (selected_option or -1) < _range[0]:
-                selected_option = int(input(prompt))
-                if selected_option < _range[0]:
+            while not _range[0] <= selected_option:
+                try:
+                    selected_option = int(input(prompt))
+                except ValueError:
+                    print(f"{error_message}\n")
+                    continue
+                if selected_option <= _range[0]:
                     print(f"{error_message}\n")
         else:  # If there is a range of 2 values
-            while selected_option not in range(_range[0], _range[1]):
-                selected_option = int(input(prompt))
-                if selected_option not in range(_range[0], _range[1]):
+            while selected_option not in range(_range[0], _range[1]+1):
+                try:
+                    selected_option = int(input(prompt))
+                except ValueError:
+                    print(f"{error_message}\n")
+                    continue
+                if selected_option not in range(_range[0], _range[1]+1):
                     print(f"{error_message}\n")
         return selected_option
     
@@ -100,8 +115,8 @@ class ParanaShopperSession:
         shoppers = self.sql.select_query("SELECT shopper_id "
                                          "FROM shoppers")
         if shopper_id not in [shopper[0] for shopper in shoppers]:
-            raise ValueError(
-                f"Shopper ID {shopper_id} is not a valid Shopper ID")
+            print(f"Shopper ID {shopper_id} is not a valid Shopper ID")
+            quit()
         return shopper_id
 
     def get_basket_id(self) -> int:
@@ -113,7 +128,7 @@ class ParanaShopperSession:
                                      "FROM shopper_baskets "
                                      "WHERE shopper_id = ? AND DATE(basket_created_date_time) = DATE('now', 'localtime') "
                                      "ORDER BY basket_created_date_time DESC "
-                                     "LIMIT 1", sql_parameters=(self.shopper_id,), fetch_all=False)
+                                     "LIMIT 1", sql_parameters=(self.shopper_id,), fetch="one")
 
     def create_basket(self) -> int:
         """
@@ -131,7 +146,7 @@ class ParanaShopperSession:
                                                                     "FROM shoppers "
                                                                     "WHERE shopper_id = ? ",
                                                                     sql_parameters=(self.shopper_id,),
-                                                                    fetch_all=False)
+                                                                    fetch="one")
 
         print(f"Welcome {shopper_first_name} {shopper_surname}!\n")
 
@@ -172,11 +187,11 @@ class ParanaShopperSession:
         self.display_options(product_categories)
         
         selected_category = self.prompt_number(prompt="Enter the number against the product category you want to choose: ",
-                                               _range=(1, len(product_categories)+1))
+                                               _range=(1, len(product_categories)))
 
         selected_category_id = self.sql.select_query("SELECT category_id "
                                                      "FROM categories "
-                                                     "WHERE category_description = ?", sql_parameters=product_categories[selected_category-1], fetch_all=False)
+                                                     "WHERE category_description = ?", sql_parameters=product_categories[selected_category-1], fetch="one")
         
         products = self.sql.select_query("SELECT product_description "
                                          "FROM products "
@@ -185,11 +200,11 @@ class ParanaShopperSession:
         self.display_options(products)
         
         selected_product = self.prompt_number(prompt="Enter the number against the product you want to choose: ",
-                                              _range=(1, len(products)+1))
+                                              _range=(1, len(products)))
 
         selected_product_id = self.sql.select_query("SELECT product_id "
                                                     "FROM products "
-                                                    "WHERE product_description = ?", sql_parameters=products[selected_product-1], fetch_all=False)
+                                                    "WHERE product_description = ?", sql_parameters=products[selected_product-1], fetch="one")
 
         sellers = self.sql.select_query("SELECT s.seller_name, PRINTF('(£%.2f)', ps.price) "
                                         "FROM sellers s "
@@ -199,11 +214,11 @@ class ParanaShopperSession:
         self.display_options(sellers)
         
         selected_seller = self.prompt_number(prompt="Enter the number against the seller you want to choose: ",
-                                             _range=(1, len(sellers)+1))
+                                             _range=(1, len(sellers)))
 
         selected_seller_id = self.sql.select_query("SELECT seller_id "
                                                    "FROM sellers "
-                                                   "WHERE seller_name = ?", sql_parameters=sellers[selected_seller-1][0], fetch_all=False)
+                                                   "WHERE seller_name = ?", sql_parameters=sellers[selected_seller-1][0], fetch="one")
 
         quantity = self.prompt_number(prompt="Enter the quantity of the selected product you want to buy: ", _range=(1, None),
                                       error_message="The quantity must be greater than 0")
@@ -253,7 +268,7 @@ class ParanaShopperSession:
 
         # basket_contents is returned with the botched basket total column, so 2 instead of 1.
         if len(basket_contents) > 2:
-            basket_item_number = self.prompt_number("Enter the basket item no. of the item you want to change: ", _range=(1, len(basket_contents)+1),
+            basket_item_number = self.prompt_number("Enter the basket item no. of the item you want to change: ", _range=(1, len(basket_contents)-1),
                                                     error_message="The basket item no. you have entered is invalid")
         else:
             basket_item_number = 1
@@ -279,7 +294,7 @@ class ParanaShopperSession:
 
         # basket_contents is returned with the botched basket total column, so 2 instead of 1.
         if len(basket_contents) > 2:
-            basket_item_number = self.prompt_number("Enter the basket item no. of the item you want to change: ", _range=(1, len(basket_contents)+1),
+            basket_item_number = self.prompt_number("Enter the basket item no. of the item you want to change: ", _range=(1, len(basket_contents)-1),
                                                     error_message="The basket item no. you have entered is invalid")
         else:
             basket_item_number = 1
@@ -314,7 +329,8 @@ class ParanaShopperSession:
             # Insert row into shoppers_orders
             self.sql.update_table("INSERT INTO shopper_orders (shopper_id, order_date, order_status) "
                                   "VALUES (?, ?, ?)", sql_parameters=(self.shopper_id, datetime.datetime.now().strftime("%Y-%m-%d"), "Placed"))
-
+            order_id = self.sql.cursor.lastrowid
+            
             # Insert row into ordered_products
             for item in basket_contents[:-1]:
                 self.sql.update_table("INSERT INTO ordered_products (order_id, product_id, seller_id, quantity, price, ordered_product_status) "
@@ -323,7 +339,7 @@ class ParanaShopperSession:
                                       "product_description = ?), (SELECT seller_id "
                                       "FROM sellers WHERE "
                                       "seller_name = ?), ?, ?, ?)", 
-                                      sql_parameters=(self.sql.cursor.lastrowid, item[1], item[2], item[3], self.remove_money_format(item[4]), "Placed"))
+                                      sql_parameters=(order_id, item[1], item[2], item[3], self.remove_money_format(item[4]), "Placed"))
 
             # Delete rows in basket_contents associated with the basket
             self.sql.update_table("DELETE FROM basket_contents "
@@ -352,7 +368,7 @@ class ParanaShopperSession:
               "5.\tRemove an item from your basket\n"
               "6.\tCheckout\n"
               "7.\tExit\n")
-        return int(input("Select an option: "))
+        return self.prompt_number("Select an option: ", _range=(1, 7))
 
     def main_loop(self) -> None:
         """
@@ -384,10 +400,6 @@ class ParanaShopperSession:
                     self.sql.close()
                     quit()
 
-                case _:
-                    print("Invalid Value")  # Close program?
-
 
 if __name__ == "__main__":
-    # Valid Shopper 10023, 10000
     ParanaShopperSession()
