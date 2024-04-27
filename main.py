@@ -222,6 +222,8 @@ class ParanaShopperSession:
 
         quantity = self.prompt_number(prompt="Enter the quantity of the selected product you want to buy: ", _range=(1, None),
                                       error_message="The quantity must be greater than 0")
+        
+        # NOTE: ix. in the brief says to create a new basket here, if there is not already one. This is done when initialising the session.
 
         query_status = self.sql.update_table("INSERT INTO basket_contents (basket_id, product_id, seller_id, quantity, price) "
                                              "VALUES (?, ?, ?, ?, ?)",
@@ -274,7 +276,7 @@ class ParanaShopperSession:
             basket_item_number = 1
 
         quantity = self.prompt_number("Enter the new quantity of the selected product you want to buy: ", _range=(1, None),
-                                      error_message="The quantity must be greater than zero")
+                                      error_message="The quantity must be greater than 0")
 
         self.sql.update_table("UPDATE basket_contents "
                               "SET quantity = ? "
