@@ -111,12 +111,16 @@ class ParanaShopperSession:
         """
         Return the shopper ID, validating that the shopper ID is in the database
         """
-        shopper_id = int(input("Please enter your Shopper ID: "))
+        try:
+            shopper_id = int(input("Please enter your Shopper ID: "))
+        except ValueError:
+            print("Shopper ID is not a valid Shopper ID")
+            self.close()
         shoppers = self.sql.select_query("SELECT shopper_id "
                                          "FROM shoppers")
         if shopper_id not in [shopper[0] for shopper in shoppers]:
             print(f"Shopper ID {shopper_id} is not a valid Shopper ID")
-            quit()
+            self.close()
         return shopper_id
 
     def get_basket_id(self) -> int:
@@ -328,9 +332,11 @@ class ParanaShopperSession:
             "Do you wish to proceed with the checkout (Y/N)? ")
 
         if answer:
+            # Dont commit any changes untill the final query. To ensure all tables are updated correctly first.
+            
             # Insert row into shoppers_orders
             self.sql.update_table("INSERT INTO shopper_orders (shopper_id, order_date, order_status) "
-                                  "VALUES (?, ?, ?)", sql_parameters=(self.shopper_id, datetime.datetime.now().strftime("%Y-%m-%d"), "Placed"))
+                                  "VALUES (?, ?, ?)", sql_parameters=(self.shopper_id, datetime.datetime.now().strftime("%Y-%m-%d"), "Placed"), commit=False)
             order_id = self.sql.cursor.lastrowid
             
             # Insert row into ordered_products
@@ -341,11 +347,11 @@ class ParanaShopperSession:
                                       "product_description = ?), (SELECT seller_id "
                                       "FROM sellers WHERE "
                                       "seller_name = ?), ?, ?, ?)", 
-                                      sql_parameters=(order_id, item[1], item[2], item[3], self.remove_money_format(item[4]), "Placed"))
+                                      sql_parameters=(order_id, item[1], item[2], item[3], self.remove_money_format(item[4]), "Placed"), commit=False)
 
             # Delete rows in basket_contents associated with the basket
             self.sql.update_table("DELETE FROM basket_contents "
-                                  "WHERE basket_id = ?", sql_parameters=(self.basket_id))
+                                  "WHERE basket_id = ?", sql_parameters=(self.basket_id), commit=False)
 
             # Delete basket in shopper_baskets
             self.sql.update_table("DELETE FROM shopper_baskets "
@@ -354,8 +360,11 @@ class ParanaShopperSession:
             print("Checkout complete, your order has been placed\n")
 
         else:
-
             return
+        
+    def close(self):
+        self.sql.close()
+        quit()
 
     def main_menu(self) -> int:
         """
@@ -399,8 +408,7 @@ class ParanaShopperSession:
                     self.checkout()
 
                 case 7:
-                    self.sql.close()
-                    quit()
+                    self.close()
 
 
 if __name__ == "__main__":
